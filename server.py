@@ -43,6 +43,10 @@ def process_payload(payload):
 
 def send_downlink(dev_eui, payload):
     try:
+        # Pastikan payload dalam format bytes sebelum dikodekan
+        if not isinstance(payload, bytes):
+            return {"status": "error", "message": "Payload must be bytes"}
+
         with grpc.insecure_channel(CHIRPSTACK_SERVER) as channel:
             client = api.DeviceServiceStub(channel)
             auth_token = [("authorization", f"Bearer {CHIRPSTACK_API_TOKEN}")]
