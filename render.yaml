@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: chirpstack-api
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn server:app"
+    envVars:
+      - key: CHIRPSTACK_SERVER
+        sync: false
+      - key: CHIRPSTACK_API_TOKEN
+        sync: false
