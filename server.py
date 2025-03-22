@@ -30,6 +30,8 @@ def process_payload(payload):
             return bytes([0x01])
         elif payload.lower() == "off":
             return bytes([0x00])
+        
+        return None
     
     elif isinstance(payload, int):
         return bytes([payload])
