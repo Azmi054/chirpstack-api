@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import json
 import grpc
 import base64
 import os
@@ -9,39 +8,35 @@ app = Flask(__name__)
 
 CHIRPSTACK_SERVER = os.getenv("CHIRPSTACK_SERVER")
 CHIRPSTACK_API_TOKEN = os.getenv("CHIRPSTACK_API_TOKEN")
-F_PORT = 1
+F_PORT = 10  # Port sesuai contoh yang kamu berikan
 
 def process_payload(payload):
-    """Mengonversi payload ke format bytes yang sesuai."""
+    """Mengonversi payload ke format bytes sesuai kebutuhan API ChirpStack."""
     if isinstance(payload, str):
+        # Jika payload adalah base64, coba decode
         try:
-            # Cek apakah string base64
-            decoded = base64.b64decode(payload)
-            return decoded
+            return base64.b64decode(payload)
         except Exception:
             pass
-        
-        # Cek jika string angka biner ('01', '00')
-        if payload in ["01", "00"]:
-            return bytes([int(payload, 16)])
-        
-        # Cek jika string 'on' atau 'off'
+
+        # Jika string "on" atau "off", ubah ke format ASCII
         if payload.lower() == "on":
-            return bytes([0x01])
+            return "ON 1".encode("ascii")
         elif payload.lower() == "off":
-            return bytes([0x00])
-        
-        return None
-    
+            return "OFF 0".encode("ascii")
+
+        # Jika string biasa, konversi ke ASCII
+        return payload.encode("ascii")
+
     elif isinstance(payload, int):
-        return bytes([payload])
-    
+        return f"{payload}".encode("ascii")
+
     elif isinstance(payload, list):
         return bytes(payload)
-    
+
     elif isinstance(payload, bytes):
         return payload
-    
+
     return None
 
 def send_downlink(dev_eui, payload):
@@ -54,29 +49,31 @@ def send_downlink(dev_eui, payload):
         if not isinstance(processed_payload, bytes):
             return {"status": "error", "message": f"Expected bytes, but got {type(processed_payload)}"}
 
+        # Buat koneksi ke ChirpStack
         with grpc.insecure_channel(CHIRPSTACK_SERVER) as channel:
             client = api.DeviceServiceStub(channel)
             auth_token = [("authorization", f"Bearer {CHIRPSTACK_API_TOKEN}")]
 
+            # Buat request
             req = api.EnqueueDeviceQueueItemRequest()
             req.queue_item.confirmed = False
-            req.queue_item.data = base64.b64encode(processed_payload).decode('utf-8')
-            req.queue_item.dev_eui = dev_eui
             req.queue_item.f_port = F_PORT
+            req.queue_item.data = processed_payload
+            req.queue_item.dev_eui = dev_eui
 
+            # Kirim downlink
             resp = client.Enqueue(req, metadata=auth_token)
             return {"status": "success", "downlink_id": resp.id}
 
     except grpc.RpcError as e:
         return {"status": "error", "code": str(e.code()), "message": e.details()}
 
-
 @app.route('/downlink', methods=['POST'])
 def downlink():
     try:
         message = request.get_json()
         dev_eui = message.get("dev_eui")
-        payload = message.get("payload")  # Bisa string, int, list, atau base64
+        payload = message.get("payload")
 
         if not dev_eui or payload is None:
             return jsonify({"error": "Invalid request payload"}), 400
@@ -86,11 +83,6 @@ def downlink():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Endpoint untuk mengecek apakah API berjalan."""
-    return jsonify({"status": "running"}), 200
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
