@@ -37,16 +37,15 @@ def process_payload(payload):
         return bytes([payload])
     
     elif isinstance(payload, list):
-        try:
-            return bytes(payload)
-        except ValueError:
-            return None
+        return bytes(payload)
+    
+    elif isinstance(payload, bytes):
+        return payload
     
     return None
 
 def send_downlink(dev_eui, payload):
     try:
-        # Pastikan payload dalam format bytes sebelum dikodekan
         processed_payload = process_payload(payload)
         if processed_payload is None:
             return {"status": "error", "message": "Invalid payload format"}
