@@ -14,8 +14,8 @@ F_PORT = 1
 def process_payload(payload):
     """Mengonversi payload ke format bytes yang sesuai."""
     if isinstance(payload, str):
-        # Cek jika string base64
         try:
+            # Cek apakah string base64
             decoded = base64.b64decode(payload)
             return decoded
         except Exception:
@@ -81,6 +81,11 @@ def downlink():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Endpoint untuk mengecek apakah API berjalan."""
+    return jsonify({"status": "running"}), 200
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
