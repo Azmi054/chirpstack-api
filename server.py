@@ -50,6 +50,10 @@ def send_downlink(dev_eui, payload):
         if processed_payload is None:
             return {"status": "error", "message": "Invalid payload format"}
 
+        # Pastikan payload dalam format bytes
+        if not isinstance(processed_payload, bytes):
+            return {"status": "error", "message": f"Expected bytes, but got {type(processed_payload)}"}
+
         with grpc.insecure_channel(CHIRPSTACK_SERVER) as channel:
             client = api.DeviceServiceStub(channel)
             auth_token = [("authorization", f"Bearer {CHIRPSTACK_API_TOKEN}")]
@@ -65,6 +69,7 @@ def send_downlink(dev_eui, payload):
 
     except grpc.RpcError as e:
         return {"status": "error", "code": str(e.code()), "message": e.details()}
+
 
 @app.route('/downlink', methods=['POST'])
 def downlink():
