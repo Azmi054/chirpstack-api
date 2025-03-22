@@ -37,15 +37,19 @@ def process_payload(payload):
         return bytes([payload])
     
     elif isinstance(payload, list):
-        return bytes(payload)
+        try:
+            return bytes(payload)
+        except ValueError:
+            return None
     
     return None
 
 def send_downlink(dev_eui, payload):
     try:
         # Pastikan payload dalam format bytes sebelum dikodekan
-        if not isinstance(payload, bytes):
-            return {"status": "error", "message": "Payload must be bytes"}
+        processed_payload = process_payload(payload)
+        if processed_payload is None:
+            return {"status": "error", "message": "Invalid payload format"}
 
         with grpc.insecure_channel(CHIRPSTACK_SERVER) as channel:
             client = api.DeviceServiceStub(channel)
@@ -53,7 +57,7 @@ def send_downlink(dev_eui, payload):
 
             req = api.EnqueueDeviceQueueItemRequest()
             req.queue_item.confirmed = False
-            req.queue_item.data = base64.b64encode(payload).decode('utf-8')
+            req.queue_item.data = base64.b64encode(processed_payload).decode('utf-8')
             req.queue_item.dev_eui = dev_eui
             req.queue_item.f_port = F_PORT
 
@@ -73,11 +77,7 @@ def downlink():
         if not dev_eui or payload is None:
             return jsonify({"error": "Invalid request payload"}), 400
 
-        processed_payload = process_payload(payload)
-        if processed_payload is None:
-            return jsonify({"error": "Unsupported payload format"}), 400
-
-        response = send_downlink(dev_eui, processed_payload)
+        response = send_downlink(dev_eui, payload)
         return jsonify(response)
 
     except Exception as e:
