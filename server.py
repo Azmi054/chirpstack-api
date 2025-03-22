@@ -11,6 +11,34 @@ CHIRPSTACK_SERVER = os.getenv("CHIRPSTACK_SERVER")
 CHIRPSTACK_API_TOKEN = os.getenv("CHIRPSTACK_API_TOKEN")
 F_PORT = 1
 
+def process_payload(payload):
+    """Mengonversi payload ke format bytes yang sesuai."""
+    if isinstance(payload, str):
+        # Cek jika string base64
+        try:
+            decoded = base64.b64decode(payload)
+            return decoded
+        except Exception:
+            pass
+        
+        # Cek jika string angka biner ('01', '00')
+        if payload in ["01", "00"]:
+            return bytes([int(payload, 16)])
+        
+        # Cek jika string 'on' atau 'off'
+        if payload.lower() == "on":
+            return bytes([0x01])
+        elif payload.lower() == "off":
+            return bytes([0x00])
+    
+    elif isinstance(payload, int):
+        return bytes([payload])
+    
+    elif isinstance(payload, list):
+        return bytes(payload)
+    
+    return None
+
 def send_downlink(dev_eui, payload):
     try:
         with grpc.insecure_channel(CHIRPSTACK_SERVER) as channel:
@@ -19,7 +47,7 @@ def send_downlink(dev_eui, payload):
 
             req = api.EnqueueDeviceQueueItemRequest()
             req.queue_item.confirmed = False
-            req.queue_item.data = base64.b64encode(bytes(payload)).decode('utf-8')
+            req.queue_item.data = base64.b64encode(payload).decode('utf-8')
             req.queue_item.dev_eui = dev_eui
             req.queue_item.f_port = F_PORT
 
@@ -34,14 +62,16 @@ def downlink():
     try:
         message = request.get_json()
         dev_eui = message.get("dev_eui")
-        command = message.get("command")
+        payload = message.get("payload")  # Bisa string, int, list, atau base64
 
-        if not dev_eui or command not in ["on", "off"]:
+        if not dev_eui or payload is None:
             return jsonify({"error": "Invalid request payload"}), 400
 
-        payload = [0x01] if command == "on" else [0x00]
-        response = send_downlink(dev_eui, payload)
+        processed_payload = process_payload(payload)
+        if processed_payload is None:
+            return jsonify({"error": "Unsupported payload format"}), 400
 
+        response = send_downlink(dev_eui, processed_payload)
         return jsonify(response)
 
     except Exception as e:
